@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Peta Kota dan Kabupaten Sulawesi Barat</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body,
+      html {
+        height: 100%;
+        font-family: "Arial", sans-serif;
+      }
+      header {
+        background-color: #2e7d32;
+        color: white;
+        padding: 15px 20px;
+        font-size: 20px;
+        font-weight: bold;
+        text-align: center;
+      }
+      .menu-bar {
+        display: flex;
+        justify-content: center;
+        background-color: #f3f3f3;
+        padding: 10px;
+        gap: 20px;
+      }
+      .menu-bar select {
+        font-size: 16px;
+        padding: 5px 10px;
+        border: 2px solid #2e7d32;
+        border-radius: 5px;
+        min-width: 200px;
+        background-color: white;
+        font-weight: bold;
+        color: #2e7d32;
+      }
+      #map {
+        height: calc(100% - 100px);
+        width: 100%;
+      }
+      .leaflet-popup-content-wrapper {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+        padding: 10px;
+        font-family: Arial, sans-serif;
+        font-size: 14px;
+      }
+      .leaflet-popup-content {
+        margin: 0;
+        line-height: 1.5;
+      }
+      .leaflet-popup-content b {
+        font-size: 15px;
+        color: #333;
+      }
+    </style>
+  </head>
+  <body>
+    <header>Peta Kota dan Kabupaten. Sulawesi Barat</header>
+
+    <div class="menu-bar">
+      <select id="kabupatenSelect">
+        <option value="">Pilih kota ▼</option>
+        <option value="Majene">Majene</option>
+        <option value="Mamuju">Mamuju</option>
+        <option value="Polewali_Mandar">Polewali Mandar</option>
+      </select>
+
+      <select id="kecamatanSelect" disabled>
+        <option value="">Pilih Kecamatan ▼</option>
+      </select>
+    </div>
+
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script>
+      const map = L.map("map").setView([-2.5, 119.2], 8);
+
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "Peta oleh OpenStreetMap & Leaflet",
+      }).addTo(map);
+
+      const geojsonLayers = {};
+      let currentKabupaten = null;
+      let displayedLayer = null;
+
+      const kabupatenFiles = {
+        Majene: "majene_kecamatan.geojson",
+        Mamuju: "mamuju_kecamatan.geojson",
+        Polewali_Mandar: "polewali_kecamatan.geojson",
+      };
+
+      const kabupatenSelect = document.getElementById("kabupatenSelect");
+      const kecamatanSelect = document.getElementById("kecamatanSelect");
+
+      for (let nama in kabupatenFiles) {
+        fetch(kabupatenFiles[nama])
+          .then((res) => res.json())
+          .then((data) => {
+            geojsonLayers[nama] = data;
+          });
+      }
+
+      kabupatenSelect.addEventListener("change", function () {
+        const selectedKab = this.value;
+
+        kecamatanSelect.innerHTML =
+          '<option value="">Pilih Kecamatan ▼</option>';
+        kecamatanSelect.disabled = true;
+
+        if (displayedLayer) {
+          map.removeLayer(displayedLayer);
+        }
+
+        if (!selectedKab || !geojsonLayers[selectedKab]) return;
+
+        currentKabupaten = selectedKab;
+        const features = geojsonLayers[selectedKab].features;
+
+        const kecamatanSet = new Set();
+        features.forEach((f) => {
+          const namaKec = f.properties.nm_kecamatan;
+          if (namaKec) kecamatanSet.add(namaKec);
+        });
+
+        [...kecamatanSet].sort().forEach((kec) => {
+          const opt = document.createElement("option");
+          opt.value = kec;
+          opt.textContent = kec;
+          kecamatanSelect.appendChild(opt);
+        });
+
+        kecamatanSelect.disabled = false;
+
+        displayedLayer = L.geoJSON(geojsonLayers[selectedKab], {
+          style: { color: "#2196f3", weight: 1 },
+          onEachFeature: (feature, layer) => {
+            const namaKec = feature.properties.nm_kecamatan;
+            if (namaKec) {
+              layer.bindPopup(`<b>${namaKec}</b>`);
+            }
+          },
+        }).addTo(map);
+
+        map.fitBounds(displayedLayer.getBounds());
+      });
+
+      kecamatanSelect.addEventListener("change", function () {
+        const selectedKec = this.value;
+
+        if (displayedLayer) {
+          map.removeLayer(displayedLayer);
+        }
+
+        if (!selectedKec || !geojsonLayers[currentKabupaten]) return;
+
+        const filteredFeatures = geojsonLayers[
+          currentKabupaten
+        ].features.filter((f) => {
+          return f.properties.nm_kecamatan === selectedKec;
+        });
+
+        displayedLayer = L.geoJSON(
+          { type: "FeatureCollection", features: filteredFeatures },
+          {
+            style: { color: "#43a047", weight: 2 },
+            onEachFeature: (feature, layer) => {
+              const namaKec = feature.properties.nm_kecamatan;
+              if (namaKec) {
+                layer.bindPopup(`<b>${namaKec}</b>`);
+              }
+            },
+          }
+        ).addTo(map);
+
+        map.fitBounds(displayedLayer.getBounds());
+      });
+    </script>
+  </body>
+</html>
